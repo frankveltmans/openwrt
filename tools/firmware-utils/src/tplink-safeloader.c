@@ -1443,6 +1443,69 @@ static struct device_info boards[] = {
 		.last_sysupgrade_partition = "file-system"
 	},
 
+	/** Firmware layout for the Deco M5 EU v3.0 */
+	{
+		.id = "DECO-M5-EU-V3.0",
+		.vendor = "",
+		.support_list =
+			"SupportList:\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:55530000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:45550000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:43410000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:4A500000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:41550000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:4B520000}\n"
+			"{product_name:M5,product_ver:1.0.0,special_id:49440000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:55530000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:45550000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:43410000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:4A500000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:41550000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:4B520000}\n"
+			"{product_name:M5,product_ver:3.0.0,special_id:49440000}\n",
+		.support_trail = '\x00',
+		.soft_ver = NULL,
+
+		.partitions = {
+			{"SBL1", 0x00000, 0x30000},
+			{"boot-config_0", 0x30000, 0x10000},
+			{"MIBIB", 0x40000, 0x10000},
+			{"boot-config_1", 0x50000, 0x10000},
+			{"QSEE", 0x60000, 0x60000},
+			{"CDT", 0xc0000, 0x10000},
+			{"DDRPARAMS", 0xd0000, 0x10000},
+			{"uboot-env", 0xe0000, 0x10000},
+			{"fs-uboot@0", 0xf0000, 0x80000},
+			{"radio", 0x170000, 0x0fff0},
+			{"bluetooth-XTAL", 0x17fff0, 0x00010},
+			{"default-mac", 0x180000, 0x01000},
+			{"device-id", 0x182000, 0x01000},
+			{"product-info", 0x183000, 0x05000},
+			{"support-list", 0x190000, 0x10000},
+			{"user-config", 0x200000, 0x10000},
+			{"device-config", 0x210000, 0x10000},
+			{"group-info", 0x220000, 0x10000},
+			{"partition-table@0", 0x230000, 0x02000},
+			{"os-image@0", 0x240000, 0x300000},
+			{"file-system@0", 0x540000, 0x790000},
+			{"soft-version@0", 0xcd0000, 0x10000},
+			{"profile@0", 0xce0000, 0x10000},
+			{"default-config@0", 0xcf0000, 0x10000},
+			{"partition-table@1", 0xd00000, 0x02000},
+			{"fs-uboot@1", 0xd10000, 0x80000},
+			{"os-image@1", 0xd90000, 0x400000},
+			{"file-system@1", 0x1190000, 0xc40000},
+			{"soft-version@1", 0x1dd0000, 0x10000},
+			{"profile@1", 0x1de0000, 0x10000},
+			{"default-config@1", 0x1df0000, 0x10000},
+			{"tm-sig", 0x1e00000, 0x200000},
+			{NULL, 0, 0}
+		},
+
+		.first_sysupgrade_partition = "os-image@1",
+		.last_sysupgrade_partition = "file-system@1"
+	},
+
 	{}
 };
 
@@ -1492,8 +1555,8 @@ static void set_source_date_epoch() {
 }
 
 /** Generates the partition-table partition */
-static struct image_partition_entry make_partition_table(const struct flash_partition_entry *p) {
-	struct image_partition_entry entry = alloc_image_partition("partition-table", 0x800);
+static struct image_partition_entry make_partition_table(const char *name, const struct flash_partition_entry *p) {
+	struct image_partition_entry entry = alloc_image_partition(name, 0x800);
 
 	char *s = (char *)entry.data, *end = (char *)(s+entry.size);
 
@@ -1528,8 +1591,8 @@ static inline uint8_t bcd(uint8_t v) {
 
 
 /** Generates the soft-version partition */
-static struct image_partition_entry make_soft_version(uint32_t rev) {
-	struct image_partition_entry entry = alloc_image_partition("soft-version", sizeof(struct soft_version));
+static struct image_partition_entry make_soft_version(const char *name, uint32_t rev) {
+	struct image_partition_entry entry = alloc_image_partition(name, sizeof(struct soft_version));
 	struct soft_version *s = (struct soft_version *)entry.data;
 
 	time_t t;
@@ -1560,12 +1623,12 @@ static struct image_partition_entry make_soft_version(uint32_t rev) {
 	return entry;
 }
 
-static struct image_partition_entry make_soft_version_from_string(const char *soft_ver) {
+static struct image_partition_entry make_soft_version_from_string(const char *name, const char *soft_ver) {
 	/** String length _including_ the terminating zero byte */
 	uint32_t ver_len = strlen(soft_ver) + 1;
 	/** Partition contains 64 bit header, the version string, and one additional null byte */
 	size_t partition_len = 2*sizeof(uint32_t) + ver_len + 1;
-	struct image_partition_entry entry = alloc_image_partition("soft-version", partition_len);
+	struct image_partition_entry entry = alloc_image_partition(name, partition_len);
 
 	uint32_t *len = (uint32_t *)entry.data;
 	len[0] = htonl(ver_len);
@@ -1863,15 +1926,29 @@ static void build_image(const char *output,
 		os_image_partition->size = kernel.st_size;
 	}
 
-	parts[0] = make_partition_table(info->partitions);
-	if (info->soft_ver)
-		parts[1] = make_soft_version_from_string(info->soft_ver);
-	else
-		parts[1] = make_soft_version(rev);
+	if (strcasecmp(info->id, "DECO-M5-EU-V3.0") == 0) {
+		parts[0] = make_partition_table("partition-table@1", info->partitions);
 
-	parts[2] = make_support_list(info);
-	parts[3] = read_file("os-image", kernel_image, false, NULL);
-	parts[4] = read_file("file-system", rootfs_image, add_jffs2_eof, file_system_partition);
+		if (info->soft_ver)
+			parts[1] = make_soft_version_from_string("soft-version@1", info->soft_ver);
+		else
+			parts[1] = make_soft_version("soft-version@1", rev);
+
+		parts[2] = make_support_list(info);
+		parts[3] = read_file("os-image@1", kernel_image, false, NULL);
+		parts[4] = read_file("file-system@1", rootfs_image, add_jffs2_eof, file_system_partition);
+	} else {
+		parts[0] = make_partition_table("partition-table", info->partitions);
+	
+		if (info->soft_ver)
+			parts[1] = make_soft_version_from_string("soft-version", info->soft_ver);
+		else
+			parts[1] = make_soft_version("soft-version", rev);
+
+		parts[2] = make_support_list(info);
+		parts[3] = read_file("os-image", kernel_image, false, NULL);
+		parts[4] = read_file("file-system", rootfs_image, add_jffs2_eof, file_system_partition);
+	}
 
 	/* Some devices need the extra-para partition to accept the firmware */
 	if (strcasecmp(info->id, "ARCHER-C2-V3") == 0 ||

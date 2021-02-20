@@ -188,6 +188,10 @@ case "$FIRMWARE" in
 		ath10kcal_extract "ART" 4096 12064
 		ath10kcal_patch_mac_crc $(macaddr_add $(cat /sys/class/net/eth0/address) -2)
 		;;
+	tp-link,deco-m5-eu-v3.0)
+		ath10kcal_extract "0:ART" 4096 12064
+		ath10kcal_patch_mac_crc $(macaddr_add $(get_mac_binary "/dev/mtd10" 0x8) +2)
+		;;
 	esac
 	;;
 "ath10k/pre-cal-ahb-a800000.wifi.bin")
@@ -249,6 +253,10 @@ case "$FIRMWARE" in
 	zyxel,wre6606)
 		ath10kcal_extract "ART" 20480 12064
 		ath10kcal_patch_mac_crc $(macaddr_add $(cat /sys/class/net/eth0/address) -1)
+		;;
+	tp-link,deco-m5-eu-v3.0)
+		ath10kcal_extract "0:ART" 20480 12064
+		ath10kcal_patch_mac_crc $(macaddr_add $(get_mac_binary "/dev/mtd10" 0x8) +3)
 		;;
 	esac
 	;;
